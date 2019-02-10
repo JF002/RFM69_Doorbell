@@ -3,6 +3,7 @@ The goal of this project is to use an ESP32 with an RFM69 to receive/send the da
 
 ## Setup
 This code runs on a WROVER-KIT V3. It uses the hardware SPI driver 'HSPI'
+
 ![Setup](https://git.codingfield.com/JF/RFM69_Doorbell/src/commit/d7003958cc42eed6c6d79c02cf48114f11504fab/ressources/setup.jpg)
 
 
