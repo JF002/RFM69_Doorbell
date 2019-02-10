@@ -119,6 +119,13 @@ void RFM69::SetDio0Mapping(RFM69::DIO0MappingPacketTX mapping) {
   WriteRegister(static_cast<uint8_t>(Registers::DIOMapping1), regValue);
 }
 
+void RFM69::SetDio1Mapping(RFM69::DIO1MappingContinuousRX mapping) {
+  auto regValue = ReadRegister(static_cast<uint8_t>(Registers::DIOMapping1));
+  regValue &= static_cast<uint8_t>(RFM69::DIO1MappingContinuousRX::Mask);
+  regValue |= static_cast<uint8_t>(mapping);
+  WriteRegister(static_cast<uint8_t>(Registers::DIOMapping1), regValue);
+}
+
 
 void RFM69::SetDio2Mapping(RFM69::DIO2MappingPacketRX mapping) {
   auto regValue = ReadRegister(static_cast<uint8_t>(Registers::DIOMapping1));
@@ -146,7 +153,7 @@ void RFM69::SetTimeoutRssiThreshold(uint8_t value) {
 void RFM69::SetSyncWordConfig(uint8_t bitTolerance, uint8_t syncWordSize, RFM69::FifoFillConditions condition,
                               bool enableSyncWord) {
   auto tolerance = static_cast<uint8_t>(bitTolerance & 0x03);
-  auto size = static_cast<uint8_t>((syncWordSize & 0x03) << 3);
+  auto size = static_cast<uint8_t>(((syncWordSize-1) & 0x03) << 3);
   auto enable = static_cast<uint8_t>(enableSyncWord ? (1 << 7) : 0);
   auto c = static_cast<uint8_t>(condition);
 
@@ -160,6 +167,16 @@ void RFM69::SetSyncWordValue1(uint8_t value) {
 void RFM69::SetSyncWordValue2(uint8_t value) {
   WriteRegister(static_cast<uint8_t>(Registers::SyncValue2), value);
 }
+
+void RFM69::SetSyncWordValue3(uint8_t value) {
+  WriteRegister(static_cast<uint8_t>(Registers::SyncValue3), value);
+}
+
+void RFM69::SetSyncWordValue4(uint8_t value) {
+  WriteRegister(static_cast<uint8_t>(Registers::SyncValue4), value);
+}
+
+
 
 void RFM69::SetPacketConfig(RFM69::AddressFilterings addressFiltering, bool crcAutoClearOff, bool enableCrc,
                             RFM69::DcFreeTypes dcFreeType, RFM69::PacketFormats format) {
@@ -213,4 +230,6 @@ void RFM69::SetOcp(bool enabled) {
   WriteRegister(static_cast<uint8_t>(Registers::Ocp), static_cast<uint8_t>(enabled ? 0x1A : 0x0F));
   WriteRegister(static_cast<uint8_t>(0x11), static_cast<uint8_t>(0xff));
 }
+
+
 

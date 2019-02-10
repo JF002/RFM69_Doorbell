@@ -37,6 +37,8 @@ namespace Codingfield {
         SyncConfig = 0x2E,
         SyncValue1 = 0x2F,
         SyncValue2 = 0x30,
+        SyncValue3 = 0x31,
+        SyncValue4 = 0x32,
         PacketConfig = 0x37,
         PayloadLength = 0x38,
         FifoThreshold = 0x3C,
@@ -80,6 +82,13 @@ namespace Codingfield {
         SyncAddress = 2 << 6,
         Rssi = 3 << 6,
         Mask = 0xC0
+      };
+
+      enum class DIO1MappingContinuousRX {
+        Dclk = 0,
+        RxReady = 0x01 << 4,
+        SyncAddress = 0x03 << 4,
+        Mask = 0x30
       };
 
       enum class DIO0MappingPacketTX {
@@ -174,6 +183,7 @@ namespace Codingfield {
       void SetFrequency(uint32_t freq);
       void SetDio0Mapping(DIO0MappingPacketRX mapping);
       void SetDio0Mapping(DIO0MappingPacketTX mapping);
+      void SetDio1Mapping(DIO1MappingContinuousRX mapping);
       void SetDio2Mapping(DIO2MappingPacketRX mapping);
       void ClearFifoOverrunFlag();
       void SetRssiThreshold(uint8_t threshold);
@@ -183,6 +193,8 @@ namespace Codingfield {
                              bool enableSyncWord);
       void SetSyncWordValue1(uint8_t value);
       void SetSyncWordValue2(uint8_t value);
+      void SetSyncWordValue3(uint8_t value);
+      void SetSyncWordValue4(uint8_t value);
       void SetPacketConfig(AddressFilterings addressFiltering, bool crcAutoClearOff, bool enableCrc, DcFreeTypes dcFreeType, PacketFormats format);
       void SetPayloadLength(uint8_t length);
       bool IsIrqFlagSet(IrqFlags1 flag);
