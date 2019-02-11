@@ -1,19 +1,24 @@
 #include <memory>
-
 #include <SPI.h>
 #include "RFM69.h"
-#include "RFM69.h"
+#include "HoneywellDoorbeelFrameBuilder.h"
 #include <Arduino.h>
-#include <az_iot/iothub_client/inc/iothub_client_ll.h>
 
 using namespace Codingfield::Communication;
 
-SPIClass spi(HSPI);
-std::unique_ptr<Codingfield::Communication::RFM69> radio;
+SPIClass spi(HSPI); // Use either HSPI or VSPI
+constexpr uint32_t deviceId = 0x44BDF020; // Use any 32 bits ID you like
+constexpr uint8_t nbRepeat = 50; // 50 repeats in the original frame
+HoneywellDoorbeelFrameBuilder frameBuilder{deviceId, nbRepeat};
 
+std::unique_ptr<Codingfield::Communication::RFM69> radio;
+std::vector<uint8_t> currentFrame;
+int state = 0;
+bool packetReceived = false;
+uint8_t currentByte;
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 int32_t interruptCounter = 0;
-bool packetReceived = false;
+
 void IRAM_ATTR handleInterrupt() {
   portENTER_CRITICAL_ISR(&mux);
   interruptCounter++;
@@ -21,91 +26,25 @@ void IRAM_ATTR handleInterrupt() {
   portEXIT_CRITICAL_ISR(&mux);
 }
 
-std::vector<uint8_t> outputFrame;
-uint8_t currentByte = 0;
-uint8_t currentNbBit = 0;
-void Push(uint8_t value, uint8_t nbBits) {
-  for(uint8_t i = 0; i < nbBits; i++) {
-
-    currentByte = static_cast<uint8_t>(currentByte & 0xFE);
-    currentByte = static_cast<uint8_t>(currentByte | ((value & 0x80) >> 7));
-
-
-    currentNbBit ++;
-    if(currentNbBit == 8) {
-      Serial.println("NEW BYTE : " + String(currentByte,BIN));
-      outputFrame.push_back(currentByte);
-      currentByte = 0;
-      currentNbBit = 0;
-    }else {
-      currentByte = currentByte << 1;
-    }
-    value = value << 1;
-
-  }
-}
-
-void FinishFrame() {
-  if(currentNbBit != 0) {
-    for(uint8_t i = 0; (i < 8-currentNbBit); i ++) {
-      currentByte = currentByte << 1;
-      currentByte = static_cast<uint8_t>(currentByte & (0xFE));
-      outputFrame.push_back(currentByte);
-    }
-  }
-}
-
-std::vector<uint8_t> payload = {0x93, 0x69, 0x36, 0xD3, 0x4D, 0xA4, 0xDB, 0x69, 0x24, 0x93, 0x49, 0x24, 0x92, 0x49, 0x24, 0x92, 0x49, 0x26};
-std::vector<uint8_t> checkPayload = {0x12, 0x6D, 0x26, 0xDA, 0x69, 0xB4, 0x9B, 0x6D, 0x24, 0x92, 0x69, 0x24, 0x92, 0x49, 0x24, 0x92, 0x49, 0x24, 0xDF};
-void BuildData() {
-  for (uint8_t i = 0; i < 50; i++) {
-    Push(0x00, 3);
-    for (auto b : payload) {
-      Push(b, 8);
-    }
-    Push((0x07 << 5), 3);
-  }
-  Push((0x07 << 2), 6);
-
-  for(uint8_t i = 0; i < 13; i++) {
-    Push(0, 8);
-  }
-  FinishFrame();
-
-  Serial.println("Payload size : " + String(outputFrame.size()));
-  Serial.println("Expected size : " + String(checkPayload.size()));
-  uint8_t s = static_cast<uint8_t>((outputFrame.size() < checkPayload.size()) ? outputFrame.size() : checkPayload.size());
-  for(uint8_t i = 0; i < s ; i++) {
-    if(outputFrame[i] != checkPayload[i]) {
-      Serial.println("Error at index " + String(i) + " : " + String(outputFrame[i],BIN) + " != " + String(checkPayload[i], BIN));
-    }
-  }
-}
-
-
 void setup() {
   Serial.begin(115200);
   Serial.flush();
   Serial.println("Hello");
+  currentFrame.reserve(64);
+
+  Serial.println("Resetting the RFM69..");
   pinMode(4, OUTPUT);
   digitalWrite(4, HIGH);
   delay(100);
   digitalWrite(4, LOW);
   delay(100);
 
-  Serial.println("");
-  BuildData();
-  Serial.println("");
-  Serial.println("Frame Size : " + String(outputFrame.size()));
-
-  delay(100);
   pinMode(15, OUTPUT); //HSPI SS
-
   pinMode(2, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(2), handleInterrupt, CHANGE);
 
+  Serial.println("Looking for RFM69...");
   spi.begin();
-
   radio.reset(new RFM69(&spi, 15));
 
   bool isRFM69 = radio->IsRfm69();
@@ -143,7 +82,6 @@ void setup() {
     radio->SetPreambleSize(0);
     radio->SetOcp(false);
 
-
     Serial.println("Init RFM69 Done!");
   }
   else {
@@ -152,23 +90,19 @@ void setup() {
   }
 }
 
-int state = 0;
-
-int frameIndex = 0;
-std::vector<uint8_t> currentFrame;
-int currentFrameSize = 0;
+bool endOfFrame= false;
 void loop() {
   if(radio) {
     switch (state) {
       case 0:
-        // Send to fifo
-
-        Serial.print("Write packet to FIFO... ");
-        currentFrameSize = 64;
-        for(uint8_t i = 0; i < currentFrameSize; i++) {
-          currentFrame.push_back(outputFrame[i + frameIndex]);
+        Serial.print("Sending data frame...");
+        // Write 64 first bytes to the fifo
+        for(uint8_t i = 0; i < 64; i++) {
+          if(frameBuilder.GetNextByte(currentByte))
+            currentFrame.push_back(currentByte);
+          else
+            break;
         }
-        frameIndex += currentFrameSize;
         radio->TransmitPacket(currentFrame);
         currentFrame.clear();
         radio->SetOcp(false);
@@ -178,13 +112,17 @@ void loop() {
 
       case 1:
         // Poll FIFO level
-        if(frameIndex < outputFrame.size()) {
-          currentFrameSize = ((outputFrame.size() - (frameIndex))  > 32) ? 32 :  (outputFrame.size() - (frameIndex));
+        if(!endOfFrame) {
           if(radio->IsIrqFlagSet(RFM69::IrqFlags2::FifoLevel) == false) {
-            for(uint8_t i = 0; i < currentFrameSize; i++) {
-              currentFrame.push_back(outputFrame[i + frameIndex]);
+            for(uint8_t i = 0; i < 32; i++) {
+              if(frameBuilder.GetNextByte(currentByte)) {
+                currentFrame.push_back(currentByte);
+              }
+              else {
+                endOfFrame = true;
+                break;
+              }
             }
-            frameIndex += currentFrameSize;
             radio->TransmitPacket(currentFrame);
             currentFrame.clear();
           }
@@ -202,6 +140,7 @@ void loop() {
         }
         break;
       case 3:
+        delay(100);
         break;
     }
   }
