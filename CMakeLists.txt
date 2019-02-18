@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.2)
-project(rfm69_1)
+project(RFM69_Doorbell)
 
 include(CMakeListsPrivate.txt)
 
